@@ -1,0 +1,6 @@
+camera_base_link: "/camera_base"
+robot_ref_link: "/nachi_tool"
+object_link: "/object"
+robot_base_link: "/base_link"
+
+

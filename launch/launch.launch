@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<launch>
+    <group ns="ros_frames_id">
+        <rosparam file="$(find ros_object_manipulation)/config/ros_link.yaml" />
+    </group>
+    <node pkg="ros_object_manipulation" type="capture_object.py" name="readPose_node" output="screen">
+        <param name="/ip"           value="127.0.0.1"/>
+        <param name="/port"           value="8800"/>
+    </node>
+    <node pkg="ros_object_manipulation" type="data.py" name="vision_setting_node" output="screen"/>
+    <node pkg="ros_object_manipulation" type="halper.py" name="object_manipulation_halper_node" output="screen"/>
+    <node pkg="ros_object_manipulation" type="object_tf.py" name="object_tf_manipulation_node" output="screen">
+        <remap from="/robot_ref"        to="/nachi_tool"/>
+        <param name="/broadcast_link"   value="true"/>
+        <param name="/base_x"           value="0.0"/>
+        <param name="/base_y"           value="0.0"/>
+        <param name="/base_z"           value="0.0"/>
+        <param name="/base_roll"           value="0.0"/>
+        <param name="/base_pitch"           value="0.0"/>
+        <param name="/base_yaw"           value="0.0"/>
+        <param name="/repeator"           value="1000"/>
+        <param name="/rx_invited_min"           value="0.0"/>
+        <param name="/rx_invited_max"           value="50.0"/>
+    </node>
+</launch>

@@ -6,8 +6,8 @@ import tf2_ros
 from tf import TransformListener
 from .CustomStruct import EulerFromQuaternionStruct
 from geometry_msgs.msg import TransformStamped, Quaternion
+from .Constant import POffSet, NachiConfigPosition, NachiStructList
 from ros_object_manipulation.srv import GetCurrentObjectPositionResponse
-from .Constant import POffSet, NachiConfigPosition, NachiStructList, ROSFramesId, StringSplit
 
 pt_memory = []
 pagv_memory = []
@@ -20,12 +20,9 @@ class VisionHalper:
         self.tf_exit = TransformListener()
         self.tfBuffer = tf2_ros.Buffer()
         self.listener = tf2_ros.TransformListener(self.tfBuffer)
-        self.ros_frames_id : ROSFramesId = ROSFramesId()
-        self.nachi_base : str = self.ros_frames_id.robot_base_link.replace(StringSplit.SL, str())      
-        self.object_tf : str = self.ros_frames_id.object_link.replace(StringSplit.SL, str())  
-        self.robot_ref_link : str = self.ros_frames_id.robot_ref_link   
-        self.camera_base_link : str = self.ros_frames_id.camera_base_link      
+        self.nachi_base : str = 'base_link'   
         self.header_of_param : str = 'param_visionsetting'
+        self.object_tf : str = 'object'
 
     def set_object_position(self) -> GetCurrentObjectPositionResponse:   
         object_pose : GetCurrentObjectPositionResponse = GetCurrentObjectPositionResponse()
@@ -51,10 +48,17 @@ class VisionHalper:
         else:
             return self.set_object_position()
 
-    def wait_tf_canTransform(self, target : str, source : str) -> None:
-        while True:
-            if self.tf_exit.canTransform(target , source, rospy.Time()):
-                break
+    def listen_nachi_base_to_tf_at_time(self) -> GetCurrentObjectPositionResponse: 
+        if self.tf_exit.canTransform("/{base}".format(base=self.nachi_base) , "/{tf_name}".format(tf_name=self.object_tf), rospy.Time()):
+            trans : TransformStamped = self.tfBuffer.lookup_transform(self.nachi_base, self.object_tf, rospy.Time())
+            euler : EulerFromQuaternionStruct = self.euler_to_quaternion(rotation=trans.transform.rotation)
+            object_pose : GetCurrentObjectPositionResponse = GetCurrentObjectPositionResponse()
+            object_pose.ack = True
+            for item in self.nachi_structs.pos_list: setattr(object_pose, item, getattr(trans.transform.translation, item) * 1000)
+            for item in self.nachi_structs.euler_list: setattr(object_pose, item, getattr(euler, item) * 180 / math.pi)
+            return object_pose
+        else:
+            return self.set_object_position()
 
     def get_p_offset(self, model_name : str) -> GetCurrentObjectPositionResponse:
         object_pose : GetCurrentObjectPositionResponse = GetCurrentObjectPositionResponse()
@@ -195,22 +199,14 @@ class VisionHalper:
         return_ack : GetCurrentObjectPositionResponse = GetCurrentObjectPositionResponse()
         if rospy.has_param(current_gripper_tcp):
             for axis in self.nachi_structs.struct_list: 
-                rospy.set_param('/{head_param}/current/tcp_config/{axis}'.format(head_param=self.header_of_param, axis=axis), rospy.get_param('{current_tcp}/{axis}'.format(current_tcp=current_gripper_tcp,axis=axis))) 
-            rospy.set_param('/{head_param}/current/tcp_config/name'.format(head_param=self.header_of_param), model_name)
+                rospy.set_param('/{head_param}/current/tcp_config/{axis}'.format(head_param=self.header_of_param, axis=axis), rospy.get_param('{current_tcp}/{axis}'.format(current_tcp=current_gripper_tcp,axis=axis)))
             return_ack.ack = True
-            self.wait_tf_canTransform("{rrl}_{name}".format(rrl=self.robot_ref_link, name=model_name), self.camera_base_link)
             return return_ack
         else:
             for axis in self.nachi_structs.struct_list: 
-                rospy.set_param('/{head_param}/current/tcp_config/{axis}'.format(head_param=self.header_of_param, axis=axis), 0.0)   
-            rospy.set_param('/{head_param}/current/tcp_config/name'.format(head_param=self.header_of_param), model_name)
+                rospy.set_param('/{head_param}/current/tcp_config/{axis}'.format(head_param=self.header_of_param, axis=axis), 0.0)
             return_ack.ack = False
-            self.wait_tf_canTransform("{rrl}_{name}".format(rrl=self.robot_ref_link, name=model_name), self.camera_base_link)
             return return_ack    
-
-
-
-    
 
     
 

@@ -25,7 +25,7 @@ class NachiPositionHalper:
         return resp
 
     def object_goal_position_callback(self, req : GetCurrentObjectPositionRequest) -> GetCurrentObjectPositionResponse:   
-        resp : GetCurrentObjectPositionResponse = self.vision_halper.listen_nachi_base_to_tf(req.name)
+        resp : GetCurrentObjectPositionResponse = self.vision_halper.listen_nachi_base_to_tf_at_time()
         return resp
 
     def ct_goal_position_callback(self, req : GetCurrentObjectPositionRequest) -> GetCurrentObjectPositionResponse:

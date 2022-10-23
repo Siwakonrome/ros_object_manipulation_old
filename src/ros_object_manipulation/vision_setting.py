@@ -3,17 +3,16 @@ import math
 import rospy
 import tf2_ros
 import geometry_msgs.msg
-from std_msgs.msg import String
 import tf.transformations as frames_methods
+from std_msgs.msg import String
 from .CustomStruct import VisionSettingTf, VisionSettingParam, Offset
-from .Constant import POffSet, TCPOffSet, StringSplit, NachiStructList, NachiConfigPosition, ROSFramesId
+from .Constant import POffSet, TCPOffSet, StringSplit, NachiStructList, NachiConfigPosition
 
 
 
 class VisionSetting:
     def __init__(self) -> None:
-        self.ros_frames_id : ROSFramesId = ROSFramesId()
-        self.ros_base_link : str = self.ros_frames_id.robot_base_link.replace(StringSplit.SL, str())
+        self.ros_base_link : str = "base_link"
         self.param : str = "param_visionsetting"
         self.dotnetdatabase : str = "dotnetdatabase"
         self.tosub_topic : str = "configuration_enable"

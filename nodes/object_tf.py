@@ -1,19 +1,18 @@
 #!/usr/bin/python3
 import tf
 import math
-import time
 import rospy
+from geometry_msgs.msg import Pose as ros_pose
+from scipy.spatial.transform import Rotation as R
 from ros_object_manipulation.Template import Position
 from ros_object_manipulation.vision_tfhalper import VisionHalper
-from ros_object_manipulation.Constant import StringSplit, ROSFramesId
 from ros_object_manipulation.srv import GetCurrentObjectPosition, GetCurrentObjectPositionResponse, GetCurrentObjectPositionRequest
 
 
 class ROSLink():
-    ros_frames_id : ROSFramesId = ROSFramesId()
-    camera_base_link: str = ros_frames_id.camera_base_link
-    robot_ref_link = ros_frames_id.robot_ref_link 
-    object_link: str = ros_frames_id.object_link   
+    camera_base_link: str = '/camera_base'
+    robot_ref_link = '/nachi_tool'
+    object_link: str = '/object'
 
 class ROSService():
     camera_detect : str = "readPose_service"
@@ -45,7 +44,6 @@ class ROSComponent():
             rospy.init_node('object_tf_manipulation_node')
             self.node_name = rospy.get_name()
             self.params = ROSParam(self.node_name)
-            self.vision_halper = VisionHalper()
             self.initilaize_services()
             self.initialize_boardcaster()
             self.initialize_params()
@@ -79,7 +77,6 @@ class ROSComponent():
             rospy.set_param(f'{self.params.rx_invited_max["name"]}', self.params.rx_invited_max["default"])
     
     def initialize_boardcaster(self):
-        self.base_cam_to_gnd_broadcaster_temp = tf.TransformBroadcaster()
         self.base_cam_to_gnd_broadcaster = tf.TransformBroadcaster()
         self.object_to_base_cam_broadcaster = tf.TransformBroadcaster()
     
@@ -89,9 +86,8 @@ class ROSComponent():
         self.get_transform_base2object = rospy.ServiceProxy(ROSService.base2object, GetCurrentObjectPosition)
 
     def initilaize_global_var(self):
-        global object_pose, object_time_stemp
+        global object_pose
         object_pose = None
-        object_time_stemp = str(rospy.Time.now())
     
     def get_param(self, param:ROSParam):
         try:
@@ -106,8 +102,7 @@ class ROSComponent():
                    ,f'{self.params.current_tcp_config}/z'
                    ,f'{self.params.current_tcp_config}/rx'
                    ,f'{self.params.current_tcp_config}/ry'
-                   ,f'{self.params.current_tcp_config}/rz'
-                   ,f'{self.params.current_tcp_config}/name']
+                   ,f'{self.params.current_tcp_config}/rz']
         for item in tcp_data:
             ret_list.append(rospy.has_param(item))
         if all(ret_list) is True:
@@ -116,11 +111,9 @@ class ROSComponent():
 
     def get_camera_position(self):
         position = Position()
-        name : str = str()
         try:
             ret, tcp_data = self.check_current_tcp()
             if ret:
-                name = rospy.get_param(tcp_data[6])
                 position.pose.set(rospy.get_param(tcp_data[0]),rospy.get_param(tcp_data[1]),rospy.get_param(tcp_data[2]))
                 position.orientation.set(rospy.get_param(tcp_data[3]), rospy.get_param(tcp_data[4]), rospy.get_param(tcp_data[5]))
             else:
@@ -128,32 +121,25 @@ class ROSComponent():
                 position.orientation.set(rospy.get_param(f'{self.params.camera_base_to_gnd_rx["name"]}'), rospy.get_param(f'{self.params.camera_base_to_gnd_ry["name"]}'), rospy.get_param(f'{self.params.camera_base_to_gnd_rz["name"]}'))
         except Exception as e:
             rospy.logerr(format(e))
-        return position, name
+        return position
 
     def broadcast_camera_base_to_ref_link(self, *args, **kwargs):
         if self.get_param(self.params.is_broadcast_link):
             now_time = rospy.Time.now()
-            cam_position, detect_name = self.get_camera_position()
+            cam_position = self.get_camera_position()
             self.base_cam_to_gnd_broadcaster.sendTransform(cam_position.pose(),
                                                             cam_position.orientation(),
                                                             now_time,
                                                             ROSLink.camera_base_link,
                                                             ROSLink.robot_ref_link)
-            time.sleep(0.2)
-            now_time__temp = rospy.Time.now()
-            self.base_cam_to_gnd_broadcaster_temp.sendTransform(cam_position.pose(),
-                                                            cam_position.orientation(),
-                                                            now_time__temp,
-                                                            ROSLink.camera_base_link,
-                                                            "{rrl}_{name}".format(rrl=ROSLink.robot_ref_link, name=detect_name))
     
-    def broadcast_object_to_base_link(self, object_position:Position, object_time_stemp : str, *args, **kwargs):
+    def broadcast_object_to_base_link(self, object_position:Position, *args, **kwargs):
         if self.get_param(self.params.is_broadcast_link):
             now_time = rospy.Time.now()
             self.object_to_base_cam_broadcaster.sendTransform(object_position.pose(),
                                                             object_position.orientation(),
                                                             now_time,
-                                                            "{ob}_{time}".format(ob=ROSLink.object_link, time=object_time_stemp),
+                                                            "{ob}".format(ob=ROSLink.object_link),
                                                             ROSLink.camera_base_link)
     
     def detect_callback(self, req):
@@ -162,10 +148,10 @@ class ROSComponent():
 def deg_to_rad(deg):
     return deg * math.pi / 180.0
 
-def take_repeator_listen_tf(this_node : ROSComponent, object_time_stemp : str) -> GetCurrentObjectPositionResponse:
-    object_frame_time_stemp : str = "{ob}_{time}".format(ob=ROSLink.object_link, time=object_time_stemp)
-    this_node.vision_halper.wait_tf_canTransform(ROSLink.camera_base_link, object_frame_time_stemp)
-    result : GetCurrentObjectPositionResponse = this_node.get_transform_base2object(object_frame_time_stemp.replace(StringSplit.SL, str())) 
+def take_repeator_listen_tf(this_node : ROSComponent) -> GetCurrentObjectPositionResponse:
+    repeator_param : int = rospy.get_param(f'{this_node.params.repeator_listen_tf["name"]}')
+    for x in range(repeator_param):
+        result : GetCurrentObjectPositionResponse = this_node.get_transform_base2object(str()) 
     return result
 
 def if_object_to_base_not_invited(this_node : ROSComponent, pose : GetCurrentObjectPositionResponse) -> GetCurrentObjectPositionResponse:
@@ -175,16 +161,16 @@ def if_object_to_base_not_invited(this_node : ROSComponent, pose : GetCurrentObj
     if (rx_abs >= rx_invited_min) and (rx_abs <= rx_invited_max): pose.ack = False
     return pose
 
+
 def detect_callback(node : ROSComponent, req : GetCurrentObjectPositionRequest):
-    global object_pose, object_time_stemp
+    global object_pose
     resp : GetCurrentObjectPositionResponse = node.camera_detect_servicer(req.name)
     object_pose = Position()
     posi_x, posi_y, posi_z = resp.x / 1000.0, resp.y / 1000.0, resp.z / 1000.0
     rpy_x, rpy_y, rpy_z = deg_to_rad(resp.rx), deg_to_rad(resp.ry), deg_to_rad(resp.rz)
     object_pose.pose.set(x = posi_x, y = posi_y, z = posi_z)
     object_pose.orientation.set(*[rpy_x, rpy_y, rpy_z])
-    object_time_stemp = str(rospy.Time.now())
-    result : GetCurrentObjectPositionResponse = take_repeator_listen_tf(this_node=node, object_time_stemp=object_time_stemp)
+    result : GetCurrentObjectPositionResponse = take_repeator_listen_tf(this_node=node)
     result.ack = resp.ack
     return if_object_to_base_not_invited(this_node=node,pose=result)
 
@@ -199,9 +185,9 @@ def main():
         rospy.loginfo("object tf manipulation node initialize completed!!")
     rospy.loginfo("Object tf manipulation begin!!")
     def loop(event):
-        global object_pose, object_time_stemp
+        global object_pose
         if object_pose is not None:
-            node.broadcast_object_to_base_link(object_position=object_pose, object_time_stemp=object_time_stemp)
+            node.broadcast_object_to_base_link(object_position=object_pose)
     rospy.Timer(rospy.Duration(1.0/1000.0), node.broadcast_camera_base_to_ref_link)
     rospy.Timer(rospy.Duration(1.0/10.0), loop)
     rospy.spin()

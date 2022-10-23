@@ -1,8 +1,5 @@
 <?xml version="1.0"?>
 <launch>
-    <group ns="ros_frames_id">
-        <rosparam file="$(find ros_object_manipulation)/config/ros_link.yaml" />
-    </group>
     <node pkg="ros_object_manipulation" type="capture_object.py" name="readPose_node" output="screen">
         <param name="/ip"           value="127.0.0.1"/>
         <param name="/port"           value="8800"/>
